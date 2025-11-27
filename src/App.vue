@@ -22,7 +22,6 @@ import '@/assets/styles/base.css'
 const { ffStore, mastoStore, instanceURL, logoutff, logoutNofan } = useAuth()
 const {
   timelineLoading,
-  refreshLoading, // 新增：获取刷新状态
   isLoading,      // 新增：获取统一的加载状态
   mergedTimeline,
   currentFilter,
@@ -125,7 +124,7 @@ function throttle(fn, delay) {
 // 刷新时间线并回到顶部
 const refreshAndScrollToTop = throttle(async () => {
   // 如果已经在刷新中，不执行
-  if (refreshLoading.value) return;
+  if (isLoading.value) return;
 
   try {
     scrollToTop();
@@ -144,7 +143,7 @@ const refreshAndScrollToTop = throttle(async () => {
   <!-- 主内容区 -->
   <main class="container mx-auto px-4 py-4 min-h-[calc(100vh-170px)]">
     <!-- 传入刷新状态给PullToRefresh组件 -->
-    <PullToRefresh :on-refresh="refreshTimelines" :is-loading="refreshLoading">
+    <PullToRefresh :on-refresh="refreshTimelines" :is-loading="isLoading">
       <!-- 普通发布框 -->
       <div ref="composeBoxRef" class="mb-4">
         <ComposeBox @send-message="handleSendMessage" />
@@ -174,7 +173,7 @@ const refreshAndScrollToTop = throttle(async () => {
       <!-- 统一时间轴 -->
       <div class="mt-6 space-y-4">
         <!-- 加载中提示 - 只在没有数据时显示，避免与下拉刷新重复 -->
-        <div v-if="timelineLoading && !refreshLoading && mergedTimeline.length === 0" class="text-center py-8">
+        <div v-if="timelineLoading && isLoading && mergedTimeline.length === 0" class="text-center py-8">
           <LoadingSpinner size="md" text="加载中..." center />
         </div>
 
@@ -209,9 +208,9 @@ const refreshAndScrollToTop = throttle(async () => {
     <transition name="fade">
       <button @click="refreshAndScrollToTop"
         class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center shadow-lg transition-colors"
-        title="刷新时间线" :disabled="refreshLoading">
+        title="刷新时间线" :disabled="isLoading">
         <!-- 当刷新中时显示 LoadingSpinner，否则显示刷新图标 -->
-        <LoadingSpinner v-if="refreshLoading" size="sm" />
+        <LoadingSpinner v-if="isLoading" size="sm" />
         <i v-else class="fas fa-rotate-right text-gray-600 dark:text-gray-300 text-base md:text-lg"></i>
       </button>
     </transition>
