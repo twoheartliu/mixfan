@@ -44,7 +44,8 @@ const {
         <span :class="countdown < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'">{{ countdown }}</span>
         <button @click="sendMessage" :disabled="!inputValue || isLoading || countdown < 0"
           class="px-6 py-2 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white disabled:opacity-50">
-          发送
+          <LoadingSpinner v-if="isLoading" size="xs" class="inline-block mr-1" />
+          {{ isLoading ? '发送中...' : '发送' }}
         </button>
       </div>
     </div>
