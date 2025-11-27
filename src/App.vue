@@ -8,6 +8,7 @@ import UserProfile from '@/components/user/UserProfile.vue'
 import PostCard from '@/components/timeline/PostCard.vue'
 import LoadMore from '@/components/timeline/LoadMore.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import PullToRefresh from '@/components/common/PullToRefresh.vue'
 
 // 导入组合式函数
 import useAuth from '@/composables/useAuth.js'
@@ -21,6 +22,8 @@ import '@/assets/styles/base.css'
 const { ffStore, mastoStore, instanceURL, logoutff, logoutNofan } = useAuth()
 const {
   timelineLoading,
+  refreshLoading, // 新增：获取刷新状态
+  isLoading,      // 新增：获取统一的加载状态
   mergedTimeline,
   currentFilter,
   hasMorePosts,
@@ -106,20 +109,32 @@ function scrollToTop() {
   })
 }
 
-// 刷新时间线并回到顶部
-async function refreshAndScrollToTop() {
-  // 隐藏刷新按钮
-  showRefreshButton.value = false
 
-  // 执行刷新
-  await refreshTimelines()
-  scrollToTop()
-
-  // 3秒后重新显示刷新按钮
-  setTimeout(() => {
-    showRefreshButton.value = true
-  }, 3000)
+// 节流函数
+function throttle(fn, delay) {
+  let lastCall = 0;
+  return function (...args) {
+    const now = Date.now();
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      return fn.apply(this, args);
+    }
+  };
 }
+
+// 刷新时间线并回到顶部
+const refreshAndScrollToTop = throttle(async () => {
+  // 如果已经在刷新中，不执行
+  if (refreshLoading.value) return;
+
+  try {
+    scrollToTop();
+    await refreshTimelines();
+  } catch (error) {
+    console.error('刷新失败:', error);
+  }
+}, 3000); // 3秒内只能执行一次
+
 </script>
 
 <template>
@@ -128,52 +143,55 @@ async function refreshAndScrollToTop() {
 
   <!-- 主内容区 -->
   <main class="container mx-auto px-4 py-4 min-h-[calc(100vh-170px)]">
-    <!-- 普通发布框 -->
-    <div ref="composeBoxRef" class="mb-4">
-      <ComposeBox @send-message="handleSendMessage" />
+    <!-- 传入刷新状态给PullToRefresh组件 -->
+    <PullToRefresh :on-refresh="refreshTimelines" :is-loading="refreshLoading">
+      <!-- 普通发布框 -->
+      <div ref="composeBoxRef" class="mb-4">
+        <ComposeBox @send-message="handleSendMessage" />
 
-      <!-- 筛选器 -->
-      <TimelineFilter :current-filter="currentFilter" @update:filter="handleFilterChange" class="mt-4" />
-    </div>
-
-    <!-- 提示信息 -->
-    <div v-if="!ffStore.userInfo.id || !mastoStore.userInfo.id" class="mt-8 p-4 bg-opacity-10 bg-blue-500 rounded-lg">
-      <h2 class="text-lg font-bold mb-2">欢迎使用拌饭 MixFan</h2>
-      <ul class="list-disc list-inside space-y-1 text-sm">
-        <li>请点击连接 NOFAN 实例账号和饭否账号</li>
-        <li>消息将同步发送到长毛象 NOFAN 实例和饭否</li>
-        <li>饭否先审后发，人工审核后才会在 TL 显示</li>
-      </ul>
-    </div>
-
-    <!-- 账号信息展示 -->
-    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-      <UserProfile v-if="mastoStore.userInfo.id" :user-info="mastoStore.userInfo" type="mastodon"
-        :on-logout="logoutNofan" />
-
-      <UserProfile v-if="ffStore.userInfo.id" :user-info="ffStore.userInfo" type="fanfou" :on-logout="logoutff" />
-    </div>
-
-    <!-- 统一时间轴 -->
-    <div class="mt-6 space-y-4">
-      <!-- 加载中提示 -->
-      <div v-if="timelineLoading && mergedTimeline.length === 0" class="text-center py-8">
-        <LoadingSpinner size="md" text="加载中..." center />
+        <!-- 筛选器 -->
+        <TimelineFilter :current-filter="currentFilter" @update:filter="handleFilterChange" class="mt-4" />
       </div>
 
-      <!-- 没有数据提示 -->
-      <div v-else-if="mergedTimeline.length === 0" class="text-center py-8 text-gray-500">
-        <i class="fas fa-inbox text-4xl mb-2"></i>
-        <p>暂无数据，请先登录您的账号</p>
+      <!-- 提示信息 -->
+      <div v-if="!ffStore.userInfo.id || !mastoStore.userInfo.id" class="mt-8 p-4 bg-opacity-10 bg-blue-500 rounded-lg">
+        <h2 class="text-lg font-bold mb-2">欢迎使用拌饭 MixFan</h2>
+        <ul class="list-disc list-inside space-y-1 text-sm">
+          <li>请点击连接 NOFAN 实例账号和饭否账号</li>
+          <li>消息将同步发送到长毛象 NOFAN 实例和饭否</li>
+          <li>饭否先审后发，人工审核后才会在 TL 显示</li>
+        </ul>
       </div>
 
-      <!-- 帖子列表 -->
-      <PostCard v-for="post in mergedTimeline" :key="post.id" :post="post" @repost-success="refreshTimelines" />
+      <!-- 账号信息展示 -->
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <UserProfile v-if="mastoStore.userInfo.id" :user-info="mastoStore.userInfo" type="mastodon"
+          :on-logout="logoutNofan" />
 
-      <!-- 加载更多 -->
-      <LoadMore v-if="mergedTimeline.length > 0" :loading="timelineLoading" :has-more="hasMorePosts"
-        @load-more="loadMore" />
-    </div>
+        <UserProfile v-if="ffStore.userInfo.id" :user-info="ffStore.userInfo" type="fanfou" :on-logout="logoutff" />
+      </div>
+
+      <!-- 统一时间轴 -->
+      <div class="mt-6 space-y-4">
+        <!-- 加载中提示 - 只在没有数据时显示，避免与下拉刷新重复 -->
+        <div v-if="timelineLoading && !refreshLoading && mergedTimeline.length === 0" class="text-center py-8">
+          <LoadingSpinner size="md" text="加载中..." center />
+        </div>
+
+        <!-- 没有数据提示 -->
+        <div v-else-if="mergedTimeline.length === 0" class="text-center py-8 text-gray-500">
+          <i class="fas fa-inbox text-4xl mb-2"></i>
+          <p>暂无数据，请先登录您的账号</p>
+        </div>
+
+        <!-- 帖子列表 -->
+        <PostCard v-for="post in mergedTimeline" :key="post.id" :post="post" @repost-success="refreshTimelines" />
+
+        <!-- 加载更多 - 使用timelineLoading而非isLoading，避免与下拉刷新冲突 -->
+        <LoadMore v-if="mergedTimeline.length > 0" :loading="timelineLoading" :has-more="hasMorePosts"
+          @load-more="loadMore" />
+      </div>
+    </PullToRefresh>
   </main>
 
   <!-- 悬浮按钮组 -->
@@ -187,12 +205,14 @@ async function refreshAndScrollToTop() {
       </button>
     </transition>
 
-    <!-- 刷新按钮 - 一直显示，点击后3秒内隐藏 -->
+    <!-- 刷新按钮 -->
     <transition name="fade">
-      <button v-if="showRefreshButton" @click="refreshAndScrollToTop"
+      <button @click="refreshAndScrollToTop"
         class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center shadow-lg transition-colors"
-        title="刷新时间线">
-        <i class="fas fa-rotate-right text-gray-600 dark:text-gray-300 text-base md:text-lg"></i>
+        title="刷新时间线" :disabled="refreshLoading">
+        <!-- 当刷新中时显示 LoadingSpinner，否则显示刷新图标 -->
+        <LoadingSpinner v-if="refreshLoading" size="sm" />
+        <i v-else class="fas fa-rotate-right text-gray-600 dark:text-gray-300 text-base md:text-lg"></i>
       </button>
     </transition>
 
@@ -233,5 +253,11 @@ async function refreshAndScrollToTop() {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 禁用按钮样式 */
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 </style>

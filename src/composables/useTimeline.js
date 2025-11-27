@@ -10,13 +10,18 @@ export default function useTimeline() {
 
   // Timeline 相关
   const timelineLoading = ref(false);
+  const refreshLoading = ref(false); // 新增：专门用于下拉刷新的loading状态
   const fanfouTimeline = ref([]);
   const mastodonTimeline = ref([]);
   const currentFilter = ref("all"); // 'all', 'mastodon', 'fanfou'
   const page = ref(1);
   const hasMorePosts = ref(true);
 
-  // 计算合并后的时间线
+  // 计算属性：是否有任何加载正在进行
+  const isLoading = computed(
+    () => timelineLoading.value || refreshLoading.value
+  );
+
   // 计算合并后的时间线
   const mergedTimeline = computed(() => {
     let timeline = [];
@@ -157,11 +162,17 @@ export default function useTimeline() {
     // 重置状态
     page.value = 1;
     hasMorePosts.value = true;
-    fanfouTimeline.value = [];
-    mastodonTimeline.value = [];
 
-    // 重新加载
-    await loadTimelines();
+    // 设置刷新状态
+    refreshLoading.value = true;
+
+    try {
+      // 重新加载
+      await loadTimelines();
+    } finally {
+      // 完成后重置刷新状态
+      refreshLoading.value = false;
+    }
   }
 
   // 设置过滤器
@@ -176,6 +187,8 @@ export default function useTimeline() {
 
   return {
     timelineLoading,
+    refreshLoading, // 导出刷新状态
+    isLoading, // 导出统一的加载状态
     fanfouTimeline,
     mastodonTimeline,
     currentFilter,

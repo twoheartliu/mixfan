@@ -12,6 +12,8 @@ const props = defineProps({
   }
 })
 
+const emit = defineEmits(['repost-success', 'reblog-success'])
+
 // 图片预览相关状态
 const showImagePreview = ref(false)
 const previewImageUrl = ref('')
