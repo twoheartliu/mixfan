@@ -168,7 +168,7 @@ async function refreshAndScrollToTop() {
       </div>
 
       <!-- 帖子列表 -->
-      <PostCard v-for="post in mergedTimeline" :key="post.id" :post="post" @reblog-success="refreshTimelines" @repost-success="refreshTimelines" />
+      <PostCard v-for="post in mergedTimeline" :key="post.id" :post="post" @repost-success="refreshTimelines" />
 
       <!-- 加载更多 -->
       <LoadMore v-if="mergedTimeline.length > 0" :loading="timelineLoading" :has-more="hasMorePosts"

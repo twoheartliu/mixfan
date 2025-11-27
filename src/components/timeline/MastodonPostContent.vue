@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
+import { ref, onMounted, computed, onBeforeUnmount, nextTick } from 'vue'
 import { safeGet, getMediaAttachments } from '@/utils/helpers'
 import { formatTimeAgo } from '@/utils/formatters'
 import { replaceEmojisFromStore } from '@/utils/emoji'
@@ -27,6 +27,10 @@ const showReblogMenu = ref(false)
 const showQuoteModal = ref(false)
 const quoteContent = ref('')
 const isReblogging = ref(false)
+
+// 本地状态跟踪，确保响应式更新
+const localReblogged = ref(null)
+const localReblogCount = ref(null)
 
 // 父级消息（如果是回复）
 const parentPost = ref(null)
@@ -79,19 +83,32 @@ const canReblog = computed(() => {
 
 // 判断是否已转发
 const isReblogged = computed(() => {
-  return safeGet(props.post, 'reblog.reblogged', safeGet(props.post, 'reblogged', false))
+  // 使用本地状态如果已设置
+  if (localReblogged.value !== null) {
+    return localReblogged.value
+  }
+
+  if (props.post.reblog) {
+    return !!props.post.reblog.reblogged
+  }
+  return !!props.post.reblogged
 })
 
 // 计算转发总数（包括转发和引用）
 const totalReblogsCount = computed(() => {
-  const reblogsCount = safeGet(props.post, 'reblog.reblogsCount', safeGet(props.post, 'reblogsCount', 0))
-  const quotesCount = safeGet(props.post, 'reblog.quotesCount', safeGet(props.post, 'quotesCount', 0))
-
-  // 如果有引用数，返回总和；否则只返回转发数
-  if (quotesCount) {
-    return reblogsCount + quotesCount
+  // 使用本地计数如果已设置
+  if (localReblogCount.value !== null) {
+    return localReblogCount.value
   }
-  return reblogsCount
+
+  if (props.post.reblog) {
+    const reblogs = props.post.reblog.reblogsCount || 0
+    const quotes = props.post.reblog.quotesCount || 0
+    return reblogs + quotes
+  }
+  const reblogs = props.post.reblogsCount || 0
+  const quotes = props.post.quotesCount || 0
+  return reblogs + quotes
 })
 
 // 获取帖子的可见性
@@ -191,6 +208,10 @@ onMounted(() => {
   }
   // 添加全局点击监听，用于关闭转发菜单
   document.addEventListener('click', handleClickOutside)
+
+  // 初始化本地状态
+  localReblogged.value = props.post.reblog ? !!props.post.reblog.reblogged : !!props.post.reblogged
+  localReblogCount.value = totalReblogsCount.value
 })
 
 onBeforeUnmount(() => {
@@ -232,37 +253,41 @@ async function handleReblog() {
 
   try {
     const postId = getOriginalPostId()
+    const wasReblogged = isReblogged.value
 
-    if (isReblogged.value) {
+    // 使用本地状态进行UI更新，确保响应式
+    localReblogged.value = !wasReblogged
+    localReblogCount.value = Math.max(0, localReblogCount.value + (wasReblogged ? -1 : 1))
+
+    // 执行API调用
+    if (wasReblogged) {
       // 取消转发
       await apis.masto.v1.statuses.$select(postId).unreblog()
-      // 更新本地状态
-      if (props.post.reblog) {
-        props.post.reblog.reblogged = false
-        props.post.reblog.reblogsCount = Math.max(0, (props.post.reblog.reblogsCount || 1) - 1)
-      } else {
-        props.post.reblogged = false
-        props.post.reblogsCount = Math.max(0, (props.post.reblogsCount || 1) - 1)
-      }
-      alert('已取消转发')
     } else {
-      // 转发
+      // 执行转发
       await apis.masto.v1.statuses.$select(postId).reblog()
-      // 更新本地状态
-      if (props.post.reblog) {
-        props.post.reblog.reblogged = true
-        props.post.reblog.reblogsCount = (props.post.reblog.reblogsCount || 0) + 1
-      } else {
-        props.post.reblogged = true
-        props.post.reblogsCount = (props.post.reblogsCount || 0) + 1
-      }
-      alert('转发成功！')
     }
 
+    // 更新原始对象（虽然可能不会触发响应式更新）
+    if (props.post.reblog) {
+      props.post.reblog.reblogged = !wasReblogged
+      props.post.reblog.reblogsCount = Math.max(0, (props.post.reblog.reblogsCount || 0) + (wasReblogged ? -1 : 1))
+    } else {
+      props.post.reblogged = !wasReblogged
+      props.post.reblogsCount = Math.max(0, (props.post.reblogsCount || 0) + (wasReblogged ? -1 : 1))
+    }
+
+    // 发出成功事件
     emit('reblog-success')
+
   } catch (error) {
     console.error('转发操作失败:', error)
-    alert(isReblogged.value ? '取消转发失败，请重试' : '转发失败，请重试')
+
+    // 发生错误时回滚本地状态
+    localReblogged.value = !localReblogged.value
+    localReblogCount.value = Math.max(0, localReblogCount.value + (localReblogged.value ? 1 : -1))
+
+    alert(localReblogged.value ? '取消转发失败，请重试' : '转发失败，请重试')
   } finally {
     isReblogging.value = false
   }
@@ -310,9 +335,11 @@ async function handleQuote() {
       visibility: 'public'
     })
 
+    // 更新本地计数（引用也算在转发计数中）
+    localReblogCount.value = (localReblogCount.value || 0) + 1
+
     closeQuoteModal()
     emit('reblog-success')
-    alert('引用成功！')
   } catch (error) {
     console.error('引用失败:', error)
     alert('引用失败，请重试')

@@ -106,7 +106,6 @@ async function handleRepost() {
 
     closeRepostModal()
     emit('repost-success')
-    alert('转发成功！')
   } catch (error) {
     console.error('转发失败:', error)
     alert('转发失败，请重试')
