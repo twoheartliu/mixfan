@@ -45,6 +45,7 @@ const replyToUsername = computed(() => {
 
 // 打开图片预览
 const openImagePreview = (imageUrl) => {
+  console.log('PostCard: openImagePreview', imageUrl)
   previewImageUrl.value = imageUrl
   showImagePreview.value = true
   // 保存当前滚动位置
@@ -55,7 +56,6 @@ const openImagePreview = (imageUrl) => {
   document.body.style.top = `-${scrollPosition.value}px`
   document.body.style.width = '100%'
 }
-
 // 关闭图片预览
 const closeImagePreview = () => {
   showImagePreview.value = false
@@ -114,23 +114,24 @@ onUnmounted(() => {
   </article>
 
   <!-- 图片预览模态框 - 不使用 Teleport，直接放在 body 下 -->
-  <div v-if="showImagePreview" class="modal-overlay" @click="closeImagePreview">
-    <div class="modal-content" @click.stop>
-      <img :src="previewImageUrl" alt="Preview" class="modal-image">
-      <button class="modal-close" @click="closeImagePreview">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
+  <Teleport to="body">
+    <div v-if="showImagePreview" class="image-preview-modal-overlay" @click="closeImagePreview">
+      <div class="image-preview-modal-content" @click.stop>
+        <img :src="previewImageUrl" alt="Preview" class="image-preview-modal-image">
+        <button class="image-preview-modal-close" @click="closeImagePreview">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
-<style>
-/* 全局样式，确保模态框覆盖所有内容 */
-.modal-overlay {
+<style scoped>
+.image-preview-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -142,10 +143,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 99999;
+  /* 使用更高的 z-index 值 */
 }
 
-.modal-content {
+.image-preview-modal-content {
   position: relative;
   width: 100%;
   height: 100%;
@@ -156,16 +158,16 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-.modal-image {
+.image-preview-modal-image {
   max-width: 100%;
   max-height: 90vh;
   object-fit: contain;
 }
 
-.modal-close {
+.image-preview-modal-close {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 20px;
+  right: 20px;
   background-color: rgba(50, 50, 50, 0.7);
   color: white;
   border: none;
@@ -175,10 +177,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-}
-
-.cursor-pointer {
   cursor: pointer;
 }
 </style>

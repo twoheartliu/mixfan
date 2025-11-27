@@ -11,12 +11,11 @@ const emit = defineEmits(['preview-image'])
 
 // 点击图片时触发预览
 const handleImageClick = (item) => {
-  // 根据不同的媒体类型选择合适的URL
-  // 饭否使用 imageurl 或 largeurl
-  // Mastodon 使用 url
   const imageUrl = item.largeurl || item.url
+  console.log('MediaAttachment: handleImageClick', imageUrl)
   emit('preview-image', imageUrl)
 }
+
 </script>
 
 <template>

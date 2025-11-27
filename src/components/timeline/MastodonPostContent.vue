@@ -169,8 +169,8 @@ const parentPostAuthorName = computed(() => {
   return replaceEmojisFromStore(displayName, mastoStore.customEmojis, accountEmojis)
 })
 
-// 处理图片预览
 const handlePreviewImage = (imageUrl) => {
+  console.log('PostContent: handlePreviewImage', imageUrl)
   emit('preview-image', imageUrl)
 }
 
